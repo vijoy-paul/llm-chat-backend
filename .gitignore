@@ -28,3 +28,6 @@ Thumbs.db
 *.local
 *.log
 coverage/
+
+# Local Netlify folder
+.netlify
