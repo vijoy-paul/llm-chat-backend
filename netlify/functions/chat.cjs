@@ -14,12 +14,7 @@ const ipTimestamps = new Map();
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
-});
-
-app.post('/chat', async (req, res) => {
+app.post('*', async (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     const now = Date.now();
     const last = ipTimestamps.get(ip) || 0;
@@ -34,7 +29,7 @@ app.post('/chat', async (req, res) => {
             return res.status(400).json({ error: 'Invalid request format.' });
         }
 
-        const lastMsg = messages[messages.length - 1];
+  const lastMsg = messages[messages.length - 1];
         if (lastMsg && lastMsg.role === 'user' && lastMsg.content) {
             const content = lastMsg.content.toLowerCase();
             if (/\b(who (are|made|created|built) (you|this)|what(('|’)?s| is) your (name|origin|model|provider|architecture|purpose|identity)|where (are|do) (you|this) (come|from)|are you (openai|chatgpt|gpt|llama|anthropic|claude|google|gemini|mistral|ai21|cohere|qwen|zhipu|zero|perplexity|llm|an ai|a language model|an llm|an artificial intelligence|an assistant)|who is your (creator|provider|developer|author|team|company|organization|maker|parent)|what model (are|is) (this|you)|what ai (are|is) (this|you)|what is your (training|source|dataset|release|version|type|platform|framework|engine|backend|api)|who trained you|who owns you|who operates you|who maintains you|who supports you|who funds you|who designed you|who controls you|who manages you|who supervises you|who is responsible for you|who invented you|who released you|who published you|who launched you|who built this|who is behind you|who is behind this|what company are you|what company is this|what company built you|what company made you|what company created you|what company owns you|what company operates you|what company maintains you|what company supports you|what company funds you|what company designed you|what company controls you|what company manages you|what company supervises you|what company is responsible for you|what company invented you|what company released you|what company published you|what company launched you|what organization are you|what organization is this|what organization built you|what organization made you|what organization created you|what organization owns you|what organization operates you|what organization maintains you|what organization supports you|what organization funds you|what organization designed you|what organization controls you|what organization manages you|what organization supervises you|what organization is responsible for you|what organization invented you|what organization released you|what organization published you|what organization launched you|what is your company|what is your organization|what is your model|what is your ai|what is your provider|what is your architecture|what is your backend|what is your api|what is your engine|what is your framework|what is your platform|what is your type|what is your version|what is your release|what is your source|what is your dataset|what is your training|what is your identity|what is your purpose|what is your name|are you a robot|are you a bot|are you an ai|are you an assistant|are you a language model|are you an llm|are you artificial intelligence|are you a neural network|are you a machine|are you a computer|are you a program|are you a software|are you a system|are you a tool|are you a product|are you a service|are you a solution|are you a technology|are you a platform|are you a framework|are you a backend|are you an api|are you an engine|are you a model|are you a version|are you a release|are you a source|are you a dataset|are you a training|are you an identity|are you a purpose|are you a name|are you openai|are you chatgpt|are you gpt|are you llama|are you anthropic|are you claude|are you google|are you gemini|are you mistral|are you ai21|are you cohere|are you qwen|are you zhipu|are you zero|are you perplexity|are you llm)\b/.test(content)) {
