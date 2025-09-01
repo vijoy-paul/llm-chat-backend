@@ -47,11 +47,21 @@ Create a `.env` file in your project root with the following variables:
 | `OPENROUTER_API_KEY`  | Your OpenRouter API key                          | `sk-...`                      |
 | `OPENROUTER_MODELS`   | Comma-separated list of model names to use        | `openai/gpt-3.5, mistral/7b`  |
 | `OPENROUTER_API_URL`  | OpenRouter API endpoint URL                      | `https://openrouter.ai/api/v1`|
-| `SITE_URL`            | The base URL of your site                        | `http://localhost:8888`       |
-| `SITE_TITLE`          | (Optional) Site title for display                | `My LLM Chatbot`              |
 | `SYSTEM_PROMPT`       | (Optional) System prompt for the LLM persona     | `You are a helpful assistant.`|
+| `BACKEND_URL`         | The base URL of your backend                     | `https://your-backend.netlify.app` |
+| `NODE_ENV`            | Environment mode (development/production)        | `production`                  |
+| `ALLOWED_ORIGINS`     | Comma-separated list of allowed CORS origins     | `https://yourdomain.com`      |
+| `SITE_URL`            | (Optional) The base URL of your site             | `https://yourdomain.com`      |
+| `SITE_TITLE`          | (Optional) Site title for display                | `My LLM Chatbot`              |
 
 > All variables are required unless marked as optional. Set these in your Netlify dashboard for production deployment.
+
+### Security Configuration
+
+For production deployment, make sure to:
+- Set `NODE_ENV=production`
+- Configure `ALLOWED_ORIGINS` with your actual domain(s)
+- Keep your API keys secure and never commit them to version control
 
 ---
 
@@ -137,8 +147,41 @@ POST /.netlify/functions/chat
 
 ---
 
+## Security Features
+
+This backend includes several security measures:
+
+### Input Validation & Sanitization
+- All user input is validated and sanitized
+- XSS protection through content filtering
+- Request size limits (1MB max)
+- Message length limits (1000 characters max)
+
+### Rate Limiting
+- 100 requests per 15 minutes per IP address
+- Built-in protection against abuse
+- Proper error messages with retry information
+
+### Security Headers
+- Helmet.js for security headers
+- Content Security Policy (CSP)
+- CORS configuration with origin restrictions
+- Compression for better performance
+
+### Error Handling
+- Secure error messages (no sensitive data exposure)
+- Proper logging without exposing API keys
+- Timeout protection for external API calls
+- Graceful degradation when services are unavailable
+
+### Environment Security
+- Environment variable validation
+- Secure API key handling
+- Production vs development configurations
+
 ## Notes
 
 - The old Express server is removed; all logic is now inside `chat.cjs`.
 - You can extend `chat.cjs` to add more endpoints or custom logic as needed.
 - Make sure environment variables are correctly set in Netlify for deployment.
+- For production, always set `NODE_ENV=production` and configure `ALLOWED_ORIGINS`.

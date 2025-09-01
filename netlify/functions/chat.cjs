@@ -4,30 +4,113 @@ const serverless = require('serverless-http');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const dotenv = require('dotenv');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { body, validationResult } = require('express-validator');
+const compression = require('compression');
+
 dotenv.config();
 
 const app = express();
 
-const rateLimitWindow = 15 * 1000; // 15 seconds
-const ipTimestamps = new Map();
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false
+}));
 
-app.use(cors());
-app.use(express.json());
+// Compression middleware
+app.use(compression());
 
-app.post('*', async (req, res) => {
-    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    const now = Date.now();
-    const last = ipTimestamps.get(ip) || 0;
-    if (now - last < rateLimitWindow) {
-        return res.status(429).json({ error: 'Rate limit: Only 1 request per 15 seconds allowed. Please wait before sending another message.' });
+// CORS configuration - restrict to specific origins in production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://yourdomain.com']
+    : true, // Allow all origins in development
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
+
+// Body parsing with size limits
+app.use(express.json({ 
+  limit: '1mb',
+  verify: (req, res, buf) => {
+    // Additional validation can be added here
+    if (buf.length > 1024 * 1024) { // 1MB limit
+      throw new Error('Request body too large');
     }
-    ipTimestamps.set(ip, now);
+  }
+}));
+
+// Input validation middleware
+const validateChatRequest = [
+  body('messages')
+    .isArray({ min: 1, max: 50 })
+    .withMessage('Messages must be an array with 1-50 items'),
+  body('messages.*.role')
+    .isIn(['user', 'assistant', 'system'])
+    .withMessage('Invalid message role'),
+  body('messages.*.content')
+    .isString()
+    .isLength({ min: 1, max: 1000 })
+    .withMessage('Message content must be a string between 1-1000 characters')
+    .custom((value) => {
+      // Basic XSS protection
+      if (typeof value === 'string' && /<script|javascript:|data:/i.test(value)) {
+        throw new Error('Potentially malicious content detected');
+      }
+      return true;
+    })
+];
+
+// Sanitize input function
+function sanitizeInput(input) {
+  if (typeof input !== 'string') return input;
+  return input
+    .replace(/[<>]/g, '') // Remove potential HTML tags
+    .trim()
+    .substring(0, 1000); // Limit length
+}
+
+app.post('*', validateChatRequest, async (req, res) => {
+    // Check validation results
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ 
+            error: 'Validation failed', 
+            details: errors.array().map(err => err.msg)
+        });
+    }
 
     try {
         let { messages } = req.body;
-        if (!messages || !Array.isArray(messages)) {
-            return res.status(400).json({ error: 'Invalid request format.' });
-        }
+        
+        // Sanitize all message content
+        messages = messages.map(msg => ({
+            ...msg,
+            content: sanitizeInput(msg.content)
+        }));
 
   const lastMsg = messages[messages.length - 1];
         if (lastMsg && lastMsg.role === 'user' && lastMsg.content) {
@@ -53,56 +136,109 @@ app.post('*', async (req, res) => {
             return res.status(400).json({ error: 'Message too long (max 1000 characters).' });
         }
 
-        const modelList = (process.env.OPENROUTER_MODELS).split(',').map(m => m.trim());
+        // Validate environment variables
+        const modelList = process.env.OPENROUTER_MODELS?.split(',').map(m => m.trim()).filter(Boolean);
         const apiKey = process.env.OPENROUTER_API_KEY;
         const apiUrl = process.env.OPENROUTER_API_URL;
 
+        if (!modelList || modelList.length === 0) {
+            console.error('No models configured');
+            return res.status(500).json({ error: 'Service configuration error' });
+        }
+
+        if (!apiKey || !apiUrl) {
+            console.error('Missing API configuration');
+            return res.status(500).json({ error: 'Service configuration error' });
+        }
+
+        // Log user query (sanitized) for debugging
         if (messages && messages.length > 0) {
             const userMsg = messages.filter(m => m.role === 'user').slice(-1)[0];
-            if (userMsg) console.log('User query:', userMsg.content);
+            if (userMsg) {
+                console.log('User query (sanitized):', sanitizeInput(userMsg.content).substring(0, 100));
+            }
         }
 
         let dailyLimitHit = false;
+        let lastError = null;
+        
         for (const model of modelList) {
             try {
                 console.log(`Trying model: ${model}`);
+                
+                // Add timeout to prevent hanging requests
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
                 const resp = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json',
+                        'User-Agent': 'LLM-Backend/1.0.0'
                     },
                     body: JSON.stringify({ model, messages }),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
+                
                 let data = null;
                 try {
                     data = await resp.json();
                 } catch (e) {
-                    console.log(`Model ${model} response not JSON or error:`, e);
+                    console.error(`Model ${model} response not JSON:`, e.message);
+                    lastError = `Invalid response from ${model}`;
                     continue;
                 }
+                
                 if (data?.error?.message && data.error.message.includes('Rate limit exceeded: free-models-per-day')) {
                     dailyLimitHit = true;
+                    console.warn(`Daily limit hit for model: ${model}`);
                     continue;
                 }
+                
                 if (resp.ok && !data?.error) {
-                    console.log(`Model ${model} response:`, JSON.stringify(data));
-                    return res.status(200).json({ ...data, altModel: model });
+                    console.log(`Model ${model} success`);
+                    return res.status(200).json({ 
+                        ...data, 
+                        altModel: model,
+                        timestamp: new Date().toISOString()
+                    });
                 } else {
-                    console.log(`Model ${model} failed:`, data?.error || resp.status);
+                    const errorMsg = data?.error?.message || `HTTP ${resp.status}`;
+                    console.error(`Model ${model} failed:`, errorMsg);
+                    lastError = errorMsg;
                 }
             } catch (e) {
-                console.log(`Error with model ${model}:`, e);
+                if (e.name === 'AbortError') {
+                    console.error(`Model ${model} timeout`);
+                    lastError = `Request timeout for ${model}`;
+                } else {
+                    console.error(`Error with model ${model}:`, e.message);
+                    lastError = e.message;
+                }
             }
         }
 
         if (dailyLimitHit) {
-            return res.status(429).json({ error: 'Daily limit exhausted. Try again after 24 hours.' });
+            return res.status(429).json({ 
+                error: 'Daily limit exhausted. Try again after 24 hours.',
+                retryAfter: '24 hours'
+            });
         }
 
-        return res.status(502).json({ error: 'All model requests failed.' });
+        return res.status(502).json({ 
+            error: 'All model requests failed.',
+            details: lastError || 'Unknown error',
+            timestamp: new Date().toISOString()
+        });
     } catch (err) {
-        res.status(500).json({ error: 'Proxy error', details: err.message });
+        console.error('Unexpected error:', err);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            timestamp: new Date().toISOString()
+        });
     }
 });
 
