@@ -60,7 +60,7 @@ A modern, secure, and scalable serverless backend for AI chatbots powered by **G
    Edit `.env` with your configuration:
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
-   GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+   GEMINI_API_URL=your_gemini_api_url_here
    SYSTEM_PROMPT=You are a helpful AI assistant. Provide clear, concise, and accurate responses to user queries.
    NODE_ENV=development
    ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
@@ -152,7 +152,7 @@ Production:  https://your-site.netlify.app/.netlify/functions
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `GEMINI_API_KEY` | ✅ | Your Google Gemini API key | `AIzaSy...` |
-| `GEMINI_API_URL` | ❌ | Gemini API endpoint (has default) | `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent` |
+| `GEMINI_API_URL` | ❌ | Gemini API endpoint (has default) | `your_gemini_api_url_here` |
 | `SYSTEM_PROMPT` | ❌ | Default system prompt | `You are a helpful AI assistant.` |
 | `NODE_ENV` | ❌ | Environment mode | `production` |
 | `ALLOWED_ORIGINS` | ❌ | CORS allowed origins (comma-separated) | `https://yourdomain.com,https://app.yourdomain.com` |
