@@ -137,18 +137,12 @@ app.post('*', validateChatRequest, async (req, res) => {
         }
 
         // Validate environment variables
-        const modelList = process.env.OPENROUTER_MODELS?.split(',').map(m => m.trim()).filter(Boolean);
-        const apiKey = process.env.OPENROUTER_API_KEY;
-        const apiUrl = process.env.OPENROUTER_API_URL;
+        const apiKey = process.env.GEMINI_API_KEY;
+        const apiUrl = process.env.GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-        if (!modelList || modelList.length === 0) {
-            console.error('No models configured');
-            return res.status(500).json({ error: 'Service configuration error' });
-        }
-
-        if (!apiKey || !apiUrl) {
-            console.error('Missing API configuration');
-            return res.status(500).json({ error: 'Service configuration error' });
+        if (!apiKey) {
+            console.error('Missing Gemini API key');
+            return res.status(500).json({ error: 'Service configuration error - Missing API key' });
         }
 
         // Log user query (sanitized) for debugging
@@ -159,80 +153,102 @@ app.post('*', validateChatRequest, async (req, res) => {
             }
         }
 
-        let dailyLimitHit = false;
-        let lastError = null;
-        
-        for (const model of modelList) {
+        try {
+            console.log('Calling Gemini API');
+            
+            // Convert messages to Gemini format
+            const geminiContents = messages.map(msg => {
+                if (msg.role === 'system') {
+                    // For system messages, we'll prepend to the first user message
+                    return null;
+                }
+                return {
+                    parts: [{ text: msg.content }],
+                    role: msg.role === 'assistant' ? 'model' : 'user'
+                };
+            }).filter(Boolean);
+
+            // Add system prompt to the first user message if it exists
+            const systemPrompt = messages.find(m => m.role === 'system');
+            if (systemPrompt && geminiContents.length > 0 && geminiContents[0].role === 'user') {
+                geminiContents[0].parts[0].text = `${systemPrompt.content}\n\n${geminiContents[0].parts[0].text}`;
+            }
+
+            // Add timeout to prevent hanging requests
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            
+            const resp = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'X-goog-api-key': apiKey,
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'LLM-Backend/1.0.0'
+                },
+                body: JSON.stringify({
+                    contents: geminiContents
+                }),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            let data = null;
             try {
-                console.log(`Trying model: ${model}`);
-                
-                // Add timeout to prevent hanging requests
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-                
-                const resp = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'LLM-Backend/1.0.0'
-                    },
-                    body: JSON.stringify({ model, messages }),
-                    signal: controller.signal
+                data = await resp.json();
+            } catch (e) {
+                console.error('Gemini response not JSON:', e.message);
+                return res.status(502).json({ 
+                    error: 'Invalid response from Gemini API',
+                    timestamp: new Date().toISOString()
                 });
-                
-                clearTimeout(timeoutId);
-                
-                let data = null;
-                try {
-                    data = await resp.json();
-                } catch (e) {
-                    console.error(`Model ${model} response not JSON:`, e.message);
-                    lastError = `Invalid response from ${model}`;
-                    continue;
-                }
-                
-                if (data?.error?.message && data.error.message.includes('Rate limit exceeded: free-models-per-day')) {
-                    dailyLimitHit = true;
-                    console.warn(`Daily limit hit for model: ${model}`);
-                    continue;
-                }
-                
-                if (resp.ok && !data?.error) {
-                    console.log(`Model ${model} success`);
-                    return res.status(200).json({ 
-                        ...data, 
-                        altModel: model,
+            }
+            
+            if (resp.ok && data?.candidates && data.candidates.length > 0) {
+                const candidate = data.candidates[0];
+                if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+                    console.log('Gemini API success');
+                    return res.status(200).json({
+                        choices: [{
+                            message: {
+                                content: candidate.content.parts[0].text
+                            }
+                        }],
+                        model: 'gemini-2.0-flash',
                         timestamp: new Date().toISOString()
                     });
                 } else {
-                    const errorMsg = data?.error?.message || `HTTP ${resp.status}`;
-                    console.error(`Model ${model} failed:`, errorMsg);
-                    lastError = errorMsg;
+                    console.error('No content in Gemini response');
+                    return res.status(502).json({ 
+                        error: 'No content in response from Gemini API',
+                        timestamp: new Date().toISOString()
+                    });
                 }
-            } catch (e) {
-                if (e.name === 'AbortError') {
-                    console.error(`Model ${model} timeout`);
-                    lastError = `Request timeout for ${model}`;
-                } else {
-                    console.error(`Error with model ${model}:`, e.message);
-                    lastError = e.message;
-                }
+            } else {
+                const errorMsg = data?.error?.message || `HTTP ${resp.status}`;
+                console.error('Gemini API failed:', errorMsg);
+                return res.status(502).json({ 
+                    error: 'Gemini API request failed',
+                    details: errorMsg,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                console.error('Gemini API timeout');
+                return res.status(504).json({ 
+                    error: 'Request timeout',
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                console.error('Error calling Gemini API:', e.message);
+                return res.status(502).json({ 
+                    error: 'Failed to call Gemini API',
+                    details: e.message,
+                    timestamp: new Date().toISOString()
+                });
             }
         }
-
-        if (dailyLimitHit) {
-            return res.status(429).json({ 
-                error: 'Daily limit exhausted. Try again after 24 hours.',
-                retryAfter: '24 hours'
-            });
-        }
-
-        return res.status(502).json({ 
-            error: 'All model requests failed.',
-            details: lastError || 'Unknown error',
-            timestamp: new Date().toISOString()
-        });
     } catch (err) {
         console.error('Unexpected error:', err);
         res.status(500).json({ 

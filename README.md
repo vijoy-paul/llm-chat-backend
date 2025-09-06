@@ -1,187 +1,271 @@
-LLM Backend (Netlify Serverless)
+# 🤖 LLM Chatbot Backend
 
-This backend is deployed as Netlify serverless functions using Express.js. It handles chat requests and can be extended with additional endpoints.
+A modern, secure, and scalable serverless backend for AI chatbots powered by **Google Gemini 2.0 Flash**. Built with Express.js and deployed on Netlify Functions.
 
-Features
+[![Netlify Status](https://api.netlify.com/api/v1/badges/your-badge-id/deploy-status)](https://app.netlify.com/sites/your-site-name/deploys)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Serverless deployment with Netlify
+## ✨ Features
 
-Express.js-based API
+- 🚀 **Serverless Architecture** - Deployed on Netlify Functions for automatic scaling
+- 🧠 **Google Gemini 2.0 Flash** - Latest AI model for fast, accurate responses
+- 🔒 **Enterprise Security** - Rate limiting, input validation, and CORS protection
+- ⚡ **High Performance** - Optimized for speed with compression and caching
+- 🛡️ **Production Ready** - Comprehensive error handling and monitoring
+- 🔧 **Easy Development** - Local development with hot reloading
+- 📊 **Health Monitoring** - Built-in health check endpoints
 
-Easy local development and testing
+## 🏗️ Architecture
 
-Health check endpoint
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Frontend      │───▶│  Netlify         │───▶│  Google Gemini  │
+│   (React/Vue)   │    │  Functions       │    │  API            │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                       ┌──────────────────┐
+                       │  Express.js      │
+                       │  Middleware      │
+                       └──────────────────┘
+```
 
-Setup & Run Locally
+## 🚀 Quick Start
 
-Install dependencies
+### Prerequisites
 
-npm install
+- Node.js 18+ 
+- npm or yarn
+- Google Gemini API key
 
+### Installation
 
-Create a .env file (see example .env.example) with your OpenRouter API key and site info:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/llm-backend.git
+   cd llm-backend
+   ```
 
-/.netlify/functions/chat/health	GET	Health check to confirm the backend is running
-{
-
-# LLM Backend (Netlify Serverless)
-
-This backend is deployed as Netlify serverless functions using Express.js. It handles chat requests and can be extended with additional endpoints.
-
-## Features
-
-- Serverless deployment with Netlify
-- Express.js-based API
-- Easy local development and testing
-- Health check endpoint
-
----
-
-
-## Environment Variables
-
-Create a `.env` file in your project root with the following variables:
-
-| Variable              | Description                                      | Example Value                  |
-|-----------------------|--------------------------------------------------|-------------------------------|
-| `OPENROUTER_API_KEY`  | Your OpenRouter API key                          | `sk-...`                      |
-| `OPENROUTER_MODELS`   | Comma-separated list of model names to use        | `openai/gpt-3.5, mistral/7b`  |
-| `OPENROUTER_API_URL`  | OpenRouter API endpoint URL                      | `https://openrouter.ai/api/v1`|
-| `SYSTEM_PROMPT`       | (Optional) System prompt for the LLM persona     | `You are a helpful assistant.`|
-| `BACKEND_URL`         | The base URL of your backend                     | `https://your-backend.netlify.app` |
-| `NODE_ENV`            | Environment mode (development/production)        | `production`                  |
-| `ALLOWED_ORIGINS`     | Comma-separated list of allowed CORS origins     | `https://yourdomain.com`      |
-| `SITE_URL`            | (Optional) The base URL of your site             | `https://yourdomain.com`      |
-| `SITE_TITLE`          | (Optional) Site title for display                | `My LLM Chatbot`              |
-
-> All variables are required unless marked as optional. Set these in your Netlify dashboard for production deployment.
-
-### Security Configuration
-
-For production deployment, make sure to:
-- Set `NODE_ENV=production`
-- Configure `ALLOWED_ORIGINS` with your actual domain(s)
-- Keep your API keys secure and never commit them to version control
-
----
-
-## Setup & Run Locally
-
-1. **Install dependencies:**
+2. **Install dependencies**
    ```bash
    npm install
    ```
-2. **Create a `.env` file** (see example `.env.example`) with your OpenRouter API key and site info:
+
+3. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Edit `.env` with your configuration:
    ```env
-   OPENROUTER_API_KEY=your_api_key_here
-   SITE_URL=http://localhost:8888
+   GEMINI_API_KEY=your_gemini_api_key_here
+   GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+   SYSTEM_PROMPT=You are a helpful AI assistant. Provide clear, concise, and accurate responses to user queries.
+   NODE_ENV=development
+   ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
    ```
-3. **Install Netlify CLI** (if not installed):
+
+4. **Start development server**
    ```bash
-   npm install -g netlify-cli
-   ```
-4. **Start the local Netlify dev server:**
-   ```bash
-   netlify dev
+   npm run dev
    ```
 
-Your serverless functions will be available at:  
-`http://localhost:8888/.netlify/functions/`
+Your API will be available at `http://localhost:8888/.netlify/functions/chat`
 
----
+## 📚 API Documentation
 
-## API Endpoints
-
-| Endpoint                                 | Method | Description                              |
-|------------------------------------------|--------|------------------------------------------|
-| `/.netlify/functions/chat/health`        | GET    | Health check to confirm backend is running|
-| `/.netlify/functions/chat`               | POST   | Main chat endpoint                       |
-
-### Chat API Request
-
-**Endpoint:**
+### Base URL
 ```
-POST /.netlify/functions/chat
+Development: http://localhost:8888/.netlify/functions
+Production:  https://your-site.netlify.app/.netlify/functions
 ```
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chat` | POST | Main chat endpoint for AI conversations |
+| `/health` | GET | Health check endpoint |
+
+### Chat API
+
+**Endpoint:** `POST /.netlify/functions/chat`
 
 **Request Body:**
 ```json
 {
   "messages": [
-    { "role": "user", "content": "Hello!" },
-    { "role": "assistant", "content": "Hi, how can I help you?" }
-    // ...more messages
+    {
+      "role": "system",
+      "content": "You are a helpful AI assistant."
+    },
+    {
+      "role": "user", 
+      "content": "Hello! How are you today?"
+    },
+    {
+      "role": "assistant",
+      "content": "I'm doing well, thank you! How can I help you?"
+    },
+    {
+      "role": "user",
+      "content": "What's the weather like?"
+    }
   ]
 }
 ```
 
-**messages** is an array of objects, each containing:
-- `role`: "user", "assistant", or "system"
-- `content`: string
+**Message Object:**
+- `role`: `"user"` | `"assistant"` | `"system"`
+- `content`: `string` (max 1000 characters)
 
-**Response Example:**
+**Success Response:**
 ```json
 {
   "choices": [
-    { "message": { "content": "I am a friendly LLM." } }
+    {
+      "message": {
+        "content": "I don't have access to real-time weather data, but I'd be happy to help you find weather information through other means!"
+      }
+    }
   ],
-  "altModel": "<model-used>"
+  "model": "gemini-2.0-flash",
+  "timestamp": "2024-01-15T10:30:00.000Z"
 }
 ```
 
-**Error Codes:**
+**Error Responses:**
 
-- `400`: Invalid request format or message too long
-- `429`: Rate limit or daily limit exceeded
-- `502`: All model requests failed
+| Status | Description |
+|--------|-------------|
+| `400` | Invalid request format or message too long |
+| `429` | Rate limit exceeded |
+| `500` | Server configuration error |
+| `502` | Gemini API request failed |
+| `504` | Request timeout |
 
----
+## 🔧 Configuration
 
-## Deployment
+### Environment Variables
 
-1. Push your code to a Git repository.
-2. Connect the repository to Netlify.
-3. Netlify will automatically deploy your serverless backend.
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `GEMINI_API_KEY` | ✅ | Your Google Gemini API key | `AIzaSy...` |
+| `GEMINI_API_URL` | ❌ | Gemini API endpoint (has default) | `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent` |
+| `SYSTEM_PROMPT` | ❌ | Default system prompt | `You are a helpful AI assistant.` |
+| `NODE_ENV` | ❌ | Environment mode | `production` |
+| `ALLOWED_ORIGINS` | ❌ | CORS allowed origins (comma-separated) | `https://yourdomain.com,https://app.yourdomain.com` |
 
-> Functions are stored in `netlify/functions/` (currently `chat.cjs`).
+### Security Configuration
 
----
+For production deployment:
 
-## Security Features
+```env
+NODE_ENV=production
+ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+```
 
-This backend includes several security measures:
+## 🛡️ Security Features
 
 ### Input Validation & Sanitization
-- All user input is validated and sanitized
-- XSS protection through content filtering
-- Request size limits (1MB max)
-- Message length limits (1000 characters max)
+- ✅ XSS protection through content filtering
+- ✅ Request size limits (1MB max)
+- ✅ Message length validation (1000 characters max)
+- ✅ SQL injection prevention
+- ✅ Malicious content detection
 
 ### Rate Limiting
-- 100 requests per 15 minutes per IP address
-- Built-in protection against abuse
-- Proper error messages with retry information
+- ✅ 100 requests per 15 minutes per IP
+- ✅ Configurable rate limits
+- ✅ Proper error messages with retry information
 
 ### Security Headers
-- Helmet.js for security headers
-- Content Security Policy (CSP)
-- CORS configuration with origin restrictions
-- Compression for better performance
+- ✅ Helmet.js security headers
+- ✅ Content Security Policy (CSP)
+- ✅ CORS with origin restrictions
+- ✅ Compression for performance
 
 ### Error Handling
-- Secure error messages (no sensitive data exposure)
-- Proper logging without exposing API keys
-- Timeout protection for external API calls
-- Graceful degradation when services are unavailable
+- ✅ Secure error messages (no sensitive data)
+- ✅ Comprehensive logging
+- ✅ Timeout protection (30s)
+- ✅ Graceful degradation
 
-### Environment Security
-- Environment variable validation
-- Secure API key handling
-- Production vs development configurations
+## 🚀 Deployment
 
-## Notes
+### Netlify (Recommended)
 
-- The old Express server is removed; all logic is now inside `chat.cjs`.
-- You can extend `chat.cjs` to add more endpoints or custom logic as needed.
-- Make sure environment variables are correctly set in Netlify for deployment.
-- For production, always set `NODE_ENV=production` and configure `ALLOWED_ORIGINS`.
+1. **Connect your repository to Netlify**
+2. **Set environment variables in Netlify dashboard:**
+   ```
+   GEMINI_API_KEY=your_production_api_key
+   NODE_ENV=production
+   ALLOWED_ORIGINS=https://yourdomain.com
+   ```
+3. **Deploy automatically on git push**
+
+### Manual Deployment
+
+```bash
+# Build and deploy
+npm run build:functions
+netlify deploy --prod
+```
+
+## 🧪 Testing
+
+### Health Check
+```bash
+curl https://your-site.netlify.app/.netlify/functions/health
+```
+
+### Chat Test
+```bash
+curl -X POST https://your-site.netlify.app/.netlify/functions/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "Hello, how are you?"}
+    ]
+  }'
+```
+
+## 📊 Monitoring
+
+The backend includes built-in monitoring:
+
+- **Health checks** for service availability
+- **Request logging** for debugging
+- **Error tracking** with timestamps
+- **Performance metrics** for optimization
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- 📧 **Email**: support@yourdomain.com
+- 🐛 **Issues**: [GitHub Issues](https://github.com/yourusername/llm-backend/issues)
+- 📖 **Documentation**: [Wiki](https://github.com/yourusername/llm-backend/wiki)
+
+## 🙏 Acknowledgments
+
+- [Google Gemini](https://ai.google.dev/) for the AI API
+- [Netlify](https://netlify.com/) for serverless hosting
+- [Express.js](https://expressjs.com/) for the web framework
+
+---
+
+<div align="center">
+  <strong>Built with ❤️ for the AI community</strong>
+</div>
