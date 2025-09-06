@@ -1,10 +1,9 @@
 [build]
   functions = "netlify/functions"
   publish = "."
-  environment = { GEMINI_API_URL_DEFAULT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" }
 
 [dev]
   functions = "netlify/functions"
 
 [secrets]
-  scan = { enabled = true, omit_keys = ["GEMINI_API_URL_DEFAULT"] }
+  scan = { enabled = true, omit_keys = ["GEMINI_API_URL"] }
